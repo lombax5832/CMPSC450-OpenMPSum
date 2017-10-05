@@ -1,0 +1,80 @@
+20 Threads
+0.44
+19 Threads
+0.32
+18 Threads
+0.26
+17 Threads
+0.42
+16 Threads
+0.37
+15 Threads
+0.24
+14 Threads
+0.23
+13 Threads
+0.38
+12 Threads
+0.31
+11 Threads
+0.31
+10 Threads
+0.16
+9 Threads
+0.29
+8 Threads
+0.25
+7 Threads
+0.16
+6 Threads
+0.19
+5 Threads
+0.13
+4 Threads
+0.15
+3 Threads
+0.13
+2 Threads
+0.12
+1 Threads
+0.11
+20 Threads
+0.05
+19 Threads
+0.04
+18 Threads
+0.05
+17 Threads
+0.03
+16 Threads
+0.03
+15 Threads
+0.03
+14 Threads
+0.03
+13 Threads
+0.03
+12 Threads
+0.02
+11 Threads
+0.03
+10 Threads
+0.04
+9 Threads
+0.02
+8 Threads
+0.02
+7 Threads
+0.04
+6 Threads
+0.02
+5 Threads
+0.02
+4 Threads
+0.01
+3 Threads
+0.01
+2 Threads
+0.01
+1 Threads
+0.01

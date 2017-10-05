@@ -1,138 +1,157 @@
 #include<omp.h>
 #include<iostream>
 #include<time.h>
+#include<sstream>
+#include<fstream>
+#include<algorithm>
+#include<iomanip>
 
 using namespace std;
 
-const int REQUESTED_THREADS = 4;
+int REQUESTED_THREADS = 4;
+//ofstream outArr;
 
-double slow_sum(double* arr, int num) {
-		double* dASum = new double[REQUESTED_THREADS];
+double slow_sum(double* arr, int num, int depth = 0) {
 
-		double dSum = 0;
+	int dASumSize = (num + 1) / 2; // equivalent of ceil (num/2) without floating point division
+	int maxThreads = num / 2;
 
-		for (int j = 0; j < REQUESTED_THREADS; j++) {
-			dASum[j] = 0.0;
+	double* dASum = new double[dASumSize];
+
+	double sum = 0.0;
+
+	omp_set_num_threads(min(maxThreads, REQUESTED_THREADS));
+
+	#pragma omp parallel
+	{
+		int i, iEnd, numThreads, threadID;
+		threadID = omp_get_thread_num();
+
+		numThreads = omp_get_num_threads();
+
+		int numDivNumThreads = ((num + 1) & ~1) / numThreads;
+
+		i = numDivNumThreads * threadID;
+		iEnd = numDivNumThreads * (threadID + 1);
+
+		i = (i + 1) & ~1; // Round i to even that is greater than itself
+
+		if (threadID == (numThreads - 1)) {
+			iEnd = num - 1;
+			//cout << numThreads << endl;
 		}
 
-		omp_set_num_threads(REQUESTED_THREADS);
-
-		#pragma omp parallel
-		{
-			int i, numThreads, threadID;
-
-			threadID = omp_get_thread_num();
-
-			numThreads = omp_get_num_threads();
-
-			for (i = threadID; i < num; i += numThreads) {
-
-				dASum[threadID] += arr[i];
-
-			}
+		for (; i < iEnd; i += 2) {
+			dASum[i/2] = arr[i] + arr[i+1];
 		}
+	}
 
-		for (int j = 0; j < REQUESTED_THREADS; j++) {
-			dSum += dASum[j];
-		}
+	if ((num % 2) == 1)
+		dASum[dASumSize - 1] = arr[num - 1];
 
+	/*
+	for (int i = 0; i < dASumSize; i++) {
+		outArr << setw(5) << dASum[i];
+	}
+	outArr << endl;
+	*/
+
+	if (depth != 0) {
+		delete[] arr;
+	}
+
+	if (dASumSize == 1) {
+		sum = dASum[0];
 		delete[] dASum;
+		return sum;
+	}
 
-		//cout << numberOfThreads << endl;
-
-		return dSum;
+	depth++;
+	return slow_sum(dASum, dASumSize, depth);
 }
 
 double fast_sum(double* A, int num) {
+	double sum = 0.0;
 
-	double sum = 0;
+	omp_set_num_threads(REQUESTED_THREADS);
 
-	double *B = new double[num * (log2(num) + 1)];
-	double *C = new double[num * (log2(num) + 1)];
-
-#pragma omp parallel for
-	for (int j = 0; j < num; j++) {
-		B[j] = A[j];
-	}
-
-	int logNum = log2(num);
-
-	for (int h = 0; h <= logNum; h++) {
-#pragma omp parallel for
-		for (int j = 0; j <= (num / 2 ^ h); j++) {
-			B[num*h + j] = B[num*(h - 1) + (2 * j - 1)] + B[num*(h - 1) + (2 * j)];
-		}
-	}
-
-	for (int h = logNum; h >= 0; h--) {
-#pragma omp parallel for
-		for (int j = 0; j <= (num / 2 ^ h); j++) {
-			if (j == 0) {
-				C[num*h] = B[num*h];
-			}
-			switch (j % 2) {
-			case 0:
-				C[num*h + j] = C[num*(h + 1) + (j / 2)];
-				break;
-			case 1:
-				C[num*h + j] = C[num*(h + 1) + ((j - 1) / 2)];
-				break;
-			}
-		}
-	}
-
-	/*
-#pragma omp parallel for
+#pragma omp parallel for reduction(+:sum)
 	for (int i = 0; i < num; i++) {
-		sum += arr[i];
+		sum += A[i];
 	}
-	*/
-	return C[num];
+	return sum;
 }
 
 
-int main() {
-	const int i_N = 1000000;
-	const int i_R = 1000;
-	double* inputArr = new double[i_N+1];
-	double sum = 0.0;
-	clock_t t;
-	double runTime, mflops;
+int main(int argc, char *argv[]) {
+	
+	int i_N = 1024;
+	int i_R = 1;
+	
+	ofstream fileFast("outputFast.txt", ios_base::app);
+	ofstream fileSlow("outputSlow.txt", ios_base::app);// file2;
 
-	for (int i = 0; i < i_N+1; i++) {
-		inputArr[i] = i;
+	//fileSlow.open("outputSlow.txt", ios_base::app);
+	//fileFast.open("outputFast.txt", ios_base::app);
+	
+	//outArr.open("outArr.txt");
+
+	//Assign R, N, and Threads from arguments
+	if (argc == 4) {
+		stringstream sstrm;
+
+		sstrm << argv[1];
+		sstrm >> i_N;
+		sstrm.clear();
+
+		sstrm << argv[2];
+		sstrm >> i_R;
+		sstrm.clear();
+
+		sstrm << argv[3];
+		sstrm >> REQUESTED_THREADS;
 	}
 
-	t = clock();
-	for (int i = 0; i <= i_R; i++) {
-		sum = slow_sum(inputArr, i_N + 1);
+	for (; REQUESTED_THREADS >= 1; REQUESTED_THREADS--) {
+
+		//Create input array with dynamic allocation
+		double* inputArr = new double[i_N];
+		double sum = 0.0;
+
+		//Use these to calculate MFLOPS
+		clock_t t;
+		double runTime;
+
+		for (int i = 0; i < i_N + 1; i++) {
+			inputArr[i] = i;
+		}
+
+		t = clock();
+		for (int i = 0; i < i_R; i++) {
+			sum = slow_sum(inputArr, i_N);
+		}
+
+		runTime = 1.0*(clock() - t) / CLOCKS_PER_SEC;
+
+		fileSlow << runTime << "\r\n";
+
+		t = clock();
+		for (int i = 0; i < i_R; i++) {
+			sum = fast_sum(inputArr, i_N);
+		}
+
+		runTime = 1.0*(clock() - t) / CLOCKS_PER_SEC;
+
+		fileFast << runTime << "\r\n";
 	}
+	fileSlow << "--" << "\r\n";
+	fileFast << "--" << "\r\n";
 
-	runTime = 1.0*(clock() - t) / CLOCKS_PER_SEC;
+	fileSlow.close();
+	fileFast.close();
 
-	mflops = (i_R*i_N) / (runTime*1e6);
-
-	cout << "Slow Sum MFLOPS: " << mflops << endl;// ':' << runTime << endl;
-
-	cout << sum << endl;
-
-
-
-
-	t = clock();
-	for (int i = 0; i <= i_R; i++) {
-		sum = fast_sum(inputArr, i_N + 1);
-	}
-
-	runTime = 1.0*(clock() - t) / CLOCKS_PER_SEC;
-
-	mflops = (i_R*i_N) / (runTime*1e6);
-
-	cout << "Fast Sum MFLOPS: " << mflops << endl;// ':' << runTime << endl;
-
-	cout << sum << endl;
-
-
-	delete[] inputArr;
+	//cout.clear();
+	//cout << sum << endl;
+	
 	return 0;
 }
